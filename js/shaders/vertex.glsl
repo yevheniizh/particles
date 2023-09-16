@@ -1,11 +1,14 @@
 varying vec2 vUv;
 uniform float time;
 
+uniform sampler2D uTexture;
+
 void main() {
 
     vUv = uv;
     vec3 newpos = position;
-    newpos.z += sin( time + position.x*10. ) * 0.5;
+    vec4 color = texture2D( uTexture, vUv );
+    newpos.xy =  color.xy;
 
     vec4 mvPosition = modelViewMatrix * vec4( newpos, 1.0 );
 

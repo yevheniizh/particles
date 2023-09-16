@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls';
 
+import vertexShader from './shaders/vertex.glsl';
+import fragmentShader from './shaders/fragment.glsl';
+
 export default class Sketch {
     constructor(options) {
         this.container = options.dom;
@@ -42,18 +45,26 @@ export default class Sketch {
     }
 
     addObjects() {
-        this.geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        this.geometry = new THREE.PlaneGeometry(1, 1, 50, 50);
         this.material = new THREE.MeshNormalMaterial();
 
-        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.material = new THREE.ShaderMaterial({
+            uniforms: {
+                time: {value: 0}
+            },
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            wireframe: false,
+        });
+
+        this.mesh = new THREE.Points(this.geometry, this.material);
         this.scene.add(this.mesh);
     }
     
     render() {
         this.time += 0.05;
 
-        this.mesh.rotation.x = this.time / 20;
-        this.mesh.rotation.y = this.time / 10;
+        this.material.uniforms.time.value = this.time; // to have access to the 'time' from shaders?
 
         this.renderer.render(this.scene, this.camera);
 

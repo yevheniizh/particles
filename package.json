@@ -1,10 +1,14 @@
 {
   "name": "particles",
+  "type": "module",
   "version": "1.0.0",
   "description": "",
   "author": "",
   "license": "ISC",
   "dependencies": {
     "three": "^0.156.1"
+  },
+  "devDependencies": {
+    "vite-plugin-glsl": "^1.1.2"
   }
 }

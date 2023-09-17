@@ -9,18 +9,29 @@ void main() {
     vec2 original = texture2D( uOriginalPosition, vUv ).xy;
     vec2 original1 = texture2D( uOriginalPosition1, vUv ).xy;
 
+    vec2 velocity = texture2D( uCurrentPosition, vUv ).zw;
+
     vec2 finalOriginal = mix(original, original1, uProgress);
 
-    vec2 force = finalOriginal - uMouse.xy;
+    velocity *= 0.99;
 
-    float len = length(force);
-    float forceFactor = 1./max(1.,len * 50.);
+    // mouse attraction to shape force
+    vec2 direction = normalize( finalOriginal - position );
+    float dist = length( finalOriginal - position );
+    if( dist > 0.01 ) {
+        velocity += direction * 0.0001;
+    }
 
-    vec2 positionToGo = finalOriginal + normalize( force ) * forceFactor * 0.3;
 
-    position.xy += (positionToGo - position.xy) * 0.05;
+    // mouse repel force
+    float mouseDistance = distance( position, uMouse.xy );
+    float maxDistance = 0.1;
+    if( mouseDistance < maxDistance ) {
+        vec2 direction = normalize( position - uMouse.xy );
+        velocity += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.01;
+    }
 
-    // position.xy += normalize( position.xy ) * 0.001;
+    position.xy += velocity;
 
-    gl_FragColor = vec4( position, 0.0, 1.0 );
+    gl_FragColor = vec4( position, velocity );
 }

@@ -9,6 +9,11 @@ import simulationFragmentShader from './shaders/simulationFragment.glsl';
 
 import texture from '../test.jpg';
 
+// linear interpolation helper
+function lerp(a, b ,n) {
+    return ( 1 - n ) * a + n * b;
+}
+
 export default class Sketch {
     constructor(options) {
         this.container = options.dom;
@@ -16,6 +21,9 @@ export default class Sketch {
 
         this.width = this.container.offsetWidth;
         this.height = this.container.offsetHeight;
+
+        this.raycaster = new THREE.Raycaster();
+        this.pointer = new THREE.Vector2();
 
         this.renderer = new THREE.WebGLRenderer({
             alpha: true
@@ -29,11 +37,37 @@ export default class Sketch {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
         this.time = 0;
-
+        this.mouseEvents();
         this.setupFBO();
         this.addObjects();
         this.setupResize();
         this.render();
+    }
+
+    mouseEvents() {
+        this.planeMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(10, 10),
+            new THREE.MeshBasicMaterial(),
+        );
+
+        this.dummy = new THREE.Mesh(
+            new THREE.SphereGeometry(0.01, 32, 32),
+            new THREE.MeshNormalMaterial(),
+        )
+        this.scene.add( this.dummy );
+
+        window.addEventListener('mousemove', (e) => {
+            this.pointer.x = (e.clientX / this.width) * 2 - 1;
+            this.pointer.y = -(e.clientY / this.height) * 2 + 1;
+            this.raycaster.setFromCamera( this.pointer, this.camera );
+
+            const intersects = this.raycaster.intersectObjects( [this.planeMesh] );
+            if ( intersects.length > 0 ) {
+                console.log(intersects[0].point);
+                this.dummy.position.copy(intersects[0].point);
+                this.simulationMaterial.uniforms.uMouse.value = intersects[0].point;
+            }
+        });
     }
 
     setupResize() {
@@ -52,8 +86,8 @@ export default class Sketch {
         for (let i = 0; i < this.size; i++) {
             for (let j = 0; j < this.size; j++) {
                 const index = i * this.size + j;
-                data[ 4 * index ] = Math.random() * 2 - 1;
-                data[ 4 * index + 1 ] = Math.random() * 2 - 1;
+                data[ 4 * index ] = lerp( -0.5, 0.5, j / ( this.size - 1 ) );
+                data[ 4 * index + 1 ] = lerp( -0.5, 0.5, i / ( this.size - 1 ) );
                 data[ 4 * index + 2 ] = 0;
                 data[ 4 * index + 3 ] = 1;
             }    
@@ -76,7 +110,9 @@ export default class Sketch {
         this.simulationMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 time: {value: 0},
-                uTexture: {value: this.positions},
+                uMouse: {value: new THREE.Vector3(0, 0, 0)},
+                uCurrentPosition: {value: this.positions},
+                uOriginalPosition: {value: this.positions},
             },
             vertexShader: simulationVertexShader,
             fragmentShader: simulationFragmentShader,
@@ -183,7 +219,7 @@ export default class Sketch {
         this.renderTarget1 = tmp;
 
         this.material.uniforms.uTexture.value = this.renderTarget.texture;
-        this.simulationMaterial.uniforms.uTexture.value = this.renderTarget1.texture;
+        this.simulationMaterial.uniforms.uCurrentPosition.value = this.renderTarget1.texture;
 
         window.requestAnimationFrame(this.render.bind(this))
     }

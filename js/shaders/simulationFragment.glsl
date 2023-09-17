@@ -12,41 +12,40 @@ float rand(vec2 co){
 
 void main() {
     float offset = rand(vUv);
-    vec2 position = texture2D( uCurrentPosition, vUv ).xy;
-    vec2 original = texture2D( uOriginalPosition, vUv ).xy;
-    vec2 original1 = texture2D( uOriginalPosition1, vUv ).xy;
+    vec3 position = texture2D( uCurrentPosition, vUv ).xyz;
+    vec3 original = texture2D( uOriginalPosition, vUv ).xyz;
+    vec3 original1 = texture2D( uOriginalPosition1, vUv ).xyz;
 
-    vec2 velocity = texture2D( uCurrentPosition, vUv ).zw;
+    vec3 finalOriginal = original;
 
-    vec2 finalOriginal = mix(original, original1, uProgress);
+    // vec2 finalOriginal = mix(original, original1, uProgress);
 
-    velocity *= 0.99;
+    // velocity *= 0.99;
 
     // mouse attraction to shape force
-    vec2 direction = normalize( finalOriginal - position );
+    vec3 direction = normalize( finalOriginal - position );
     float dist = length( finalOriginal - position );
     if( dist > 0.01 ) {
-        velocity += direction * 0.0001;
+        position += direction * 0.001;
     }
 
-
     // mouse repel force
-    float mouseDistance = distance( position, uMouse.xy );
+    float mouseDistance = distance( position, uMouse );
     float maxDistance = 0.1;
     if( mouseDistance < maxDistance ) {
-        vec2 direction = normalize( position - uMouse.xy );
-        velocity += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.001;
+        vec3 direction = normalize( position - uMouse );
+        position += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.01;
     }
 
     // lifespan of a particle
-    float lifespan = 20.;
+    float lifespan = 10.;
     float age = mod( uTime + lifespan * offset, lifespan ); // 0...20
     if( age < 0.1 ) {
-        velocity = vec2(0.0,0.001);
-        position.xy = finalOriginal;
+        // velocity = vec2(0.0,0.001);
+        position.xyz = finalOriginal;
     }
 
-    position.xy += velocity;
+    // position.xy += velocity;
 
-    gl_FragColor = vec4( position, velocity );
+    gl_FragColor = vec4( position, 1. );
 }

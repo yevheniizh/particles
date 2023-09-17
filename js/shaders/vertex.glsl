@@ -8,7 +8,7 @@ void main() {
     vUv = uv;
     vec3 newpos = position;
     vec4 color = texture2D( uTexture, vUv );
-    newpos.xy =  color.xy;
+    newpos.xyz =  color.xyz;
 
     vec4 mvPosition = modelViewMatrix * vec4( newpos, 1.0 );
 

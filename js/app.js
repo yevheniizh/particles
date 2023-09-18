@@ -5,6 +5,7 @@ import GUI from 'lil-gui';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader';
 import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler';
 
+import vertexShaderInstanced from './shaders/vertexInstanced.glsl';
 import vertexShader from './shaders/vertex.glsl';
 import fragmentShader from './shaders/fragment.glsl';
 
@@ -40,7 +41,7 @@ const loadImage = path => {
 
 export default class Sketch {
     constructor(options) {
-        this.size = 1024;
+        this.size = 128;
         this.number = this.size * this.size;
         this.container = options.dom;
         this.scene = new THREE.Scene();
@@ -386,22 +387,35 @@ export default class Sketch {
         this.positions.needsUpdate = true;
 
 
-        
+
         this.material = new THREE.ShaderMaterial({
             uniforms: {
-                time: {value: 0},
-                // uTexture: { value: new THREE.TextureLoader().load(texture) },
-                uTexture: { value: this.positions },
+              time: {value: 0},
+              // uTexture: { value: new THREE.TextureLoader().load(texture) },
+              uTexture: { value: this.positions },
+              uVelocity: { value: null },
             },
-            vertexShader: vertexShader,
+            vertexShader: vertexShaderInstanced,
             fragmentShader: fragmentShader,
-            depthWrite: false,
-            depthTest: false,
-            transparent: true,
+            // depthWrite: false,
+            // depthTest: false,
+            // transparent: true,
             wireframe: false,
-        });
-
-        this.mesh = new THREE.Points(this.geometry, this.material);
+          });
+      
+          // this.mesh = new THREE.Points(this.geometry, this.material);
+          this.geometryInstanced = new THREE.BoxGeometry(0.01, 0.01, 0.01);
+          this.mesh = new THREE.InstancedMesh(this.geometryInstanced, this.material, this.number);
+          // create instance uv reference
+          let uvInstanced = new Float32Array(this.number * 2);
+          for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
+              const index = i * this.size + j;
+              uvInstanced[2 * index] = j / (this.size - 1);
+              uvInstanced[2 * index + 1] = i / (this.size - 1);
+            }
+          }
+          this.geometryInstanced.setAttribute('uvRef', new THREE.InstancedBufferAttribute(uvInstanced, 2));
         this.scene.add(this.mesh);
     }
     
@@ -414,6 +428,7 @@ export default class Sketch {
         this.renderer.render(this.scene, this.camera);
 
         this.material.uniforms.uTexture.value = this.gpuCompute.getCurrentRenderTarget( this.positionVariable ).texture;
+        this.material.uniforms.uVelocity.value = this.gpuCompute.getCurrentRenderTarget( this.velocityVariable ).texture;
         this.positionUniforms.uTime.value = this.time;
 
         window.requestAnimationFrame(this.render.bind(this))

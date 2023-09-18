@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls';
 import {GPUComputationRenderer} from 'three/examples/jsm/misc/GPUComputationRenderer';
 import GUI from 'lil-gui';
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler';
 
 import vertexShader from './shaders/vertex.glsl';
 import fragmentShader from './shaders/fragment.glsl';
@@ -14,6 +16,7 @@ import t1 from '../logo.png';
 import t2 from '../super.png';
 
 import texture from '../test.jpg';
+import suzanne from '../suzanne.glb?url'; // ?url to avoid import errors
 
 // linear interpolation helper
 function lerp(a, b ,n) {
@@ -62,11 +65,23 @@ export default class Sketch {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
         this.time = 0;
+        this._position = new THREE.Vector3();
+
+        this.loader = new GLTFLoader();
 
         this.setupSettings();
 
-        Promise.all([this.getPixelDataFromImage(t1), this.getPixelDataFromImage(t2)])
-            .then(textures => {
+        Promise.all([this.loader.loadAsync(suzanne)])
+            .then(([model]) => {
+                this.suzanne = model.scene.children[0];
+                this.suzanne.geometry.rotateX(-Math.PI/2);
+                this.suzanne.material = new THREE.MeshNormalMaterial();
+                console.log(this.suzanne);
+
+                this.sampler = new MeshSurfaceSampler( this.suzanne )
+                    .build();
+
+                // this.scene.add(this.suzanne);
                 this.data1 = this.getPointsOnSphere();
                 this.data2 = this.getPointsOnSphere();
                 this.mouseEvents();
@@ -145,6 +160,27 @@ export default class Sketch {
         return dataTexture;
     }
 
+    getPointsOnSuzanne() {
+        const data = new Float32Array( 4 * this.number ); // 4 corresponds to 4 dimensions of vec4 from shader
+        for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
+                const index = i * this.size + j;
+
+                this.sampler.sample( this._position );
+
+                data[ 4 * index ] = this._position.x;
+                data[ 4 * index + 1 ] = this._position.y;
+                data[ 4 * index + 2 ] = this._position.z;
+                data[ 4 * index + 3 ] = ( Math.random() - 0.5 ) * 0.01;
+            }    
+        }
+        
+        let dataTexture = new THREE.DataTexture( data, this.size, this.size, THREE.RGBAFormat, THREE.FloatType );
+        dataTexture.needsUpdate = true;
+
+        return dataTexture;
+    }
+
     async getPixelDataFromImage(url) {
         let img = await loadImage(url);
         let width = 200;
@@ -188,8 +224,8 @@ export default class Sketch {
     }
 
     mouseEvents() {
-        this.planeMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(1, 30, 30),
+        this.raycasterMesh = new THREE.Mesh(
+            this.suzanne.geometry,
             new THREE.MeshBasicMaterial(),
         );
 
@@ -204,7 +240,7 @@ export default class Sketch {
             this.pointer.y = -(e.clientY / this.height) * 2 + 1;
             this.raycaster.setFromCamera( this.pointer, this.camera );
 
-            const intersects = this.raycaster.intersectObjects( [this.planeMesh] );
+            const intersects = this.raycaster.intersectObjects( [this.raycasterMesh] );
             if ( intersects.length > 0 ) {
                 this.dummy.position.copy(intersects[0].point);
                 this.simulationMaterial.uniforms.uMouse.value = intersects[0].point;
@@ -221,7 +257,7 @@ export default class Sketch {
     initGPGPU() {
         this.gpuCompute = new GPUComputationRenderer( this.size, this.size, this.renderer );
 
-        this.pointsOnSphere = this.getPointsOnSphere();
+        this.pointsOnSphere = this.getPointsOnSuzanne();
 
         this.positionVariable = this.gpuCompute.addVariable( 'uCurrentPosition', simulationFragmentPositionShader, this.pointsOnSphere );
         this.velocityVariable = this.gpuCompute.addVariable( 'uCurrentVelocity', simulationFragmentVelocityShader, this.getVelocitiesOnSphere );

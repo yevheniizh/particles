@@ -25,7 +25,7 @@ void main() {
     vec3 direction = normalize( original - position );
     float dist = length( original - position );
     if( dist > 0.01 ) {
-        velocity += direction * 0.001;
+        velocity += direction * 0.0001;
     }
 
     // mouse repel force

@@ -19,6 +19,9 @@ import t2 from '../super.png';
 import texture from '../test.jpg';
 import suzanne from '../suzanne.glb?url'; // ?url to avoid import errors
 
+import matcap from '../matcap.png';
+import matcap1 from '../matcap1.png';
+
 // linear interpolation helper
 function lerp(a, b ,n) {
     return ( 1 - n ) * a + n * b;
@@ -394,6 +397,7 @@ export default class Sketch {
               // uTexture: { value: new THREE.TextureLoader().load(texture) },
               uTexture: { value: this.positions },
               uVelocity: { value: null },
+              uMatcap: { value: new THREE.TextureLoader().load(matcap1) },
             },
             vertexShader: vertexShaderInstanced,
             fragmentShader: fragmentShader,

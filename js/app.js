@@ -35,7 +35,9 @@ const loadImage = path => {
 
 export default class Sketch {
     constructor(options) {
-        this.size = 6;
+        this.init = false;
+        this.currentParticles = 0;
+        this.size = 64;
         this.number = this.size * this.size;
         this.container = options.dom;
         this.scene = new THREE.Scene();
@@ -68,7 +70,7 @@ export default class Sketch {
                 this.data1 = this.getPointsOnSphere();
                 this.data2 = this.getPointsOnSphere();
                 this.mouseEvents();
-                this.setupFBO1();
+                this.setupFBO();
                 this.addObjects();
                 this.setupResize();
                 this.render();
@@ -207,67 +209,6 @@ export default class Sketch {
 
         // Create FBO scene
         this.sceneFBO = new THREE.Scene();
-        this.cameraFBO = new THREE.OrthographicCamera(-1, 1, 1, -1, -2, 2);
-        this.cameraFBO.position.z = 1;
-        this.cameraFBO.lookAt(new THREE.Vector3( 0, 0, 0 ))
-
-        let geo = new THREE.PlaneGeometry( 2, 2, 2, 2 );
-        this.simulationMaterial = new THREE.MeshBasicMaterial( {
-            color: 0xff0000,
-            wireframe: true,
-        } );
-        this.simulationMaterial = new THREE.ShaderMaterial({
-            uniforms: {
-                time: {value: 0},
-                uMouse: {value: new THREE.Vector3(0, 0, 0)},
-                uTime: {value:0},
-                uProgress: {value:0},
-                uCurrentPosition: {value: this.data1},
-                uOriginalPosition: {value: this.data1},
-                uOriginalPosition1: {value: this.data2},
-            },
-            vertexShader: simulationVertexShader,
-            fragmentShader: simulationFragmentShader,
-        });
-        this.simulationMesh = new THREE.Mesh(geo, this.simulationMaterial);
-        this.sceneFBO.add(this.simulationMesh);
-
-        this.renderTarget = new THREE.WebGLRenderTarget(this.size, this.size, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
-            format: THREE.RGBAFormat,
-            type: THREE.FloatType,
-        })
-
-        this.renderTarget1 = new THREE.WebGLRenderTarget(this.size, this.size, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
-            format: THREE.RGBAFormat,
-            type: THREE.FloatType,
-        })
-    }
-
-    // Frame Buffer Output
-    setupFBO1() {
-        // Create data texture
-        this.material = new THREE.MeshNormalMaterial();
-
-        const data = new Float32Array( 4 * this.number ); // 4 corresponds to 4 dimensions of vec4 from shader
-        for (let i = 0; i < this.size; i++) {
-            for (let j = 0; j < this.size; j++) {
-                const index = i * this.size + j;
-                data[ 4 * index ] = lerp( -0.5, 0.5, j / ( this.size - 1 ) );
-                data[ 4 * index + 1 ] = lerp( -0.5, 0.5, i / ( this.size - 1 ) );
-                data[ 4 * index + 2 ] = 0;
-                data[ 4 * index + 3 ] = 1;
-            }    
-        }
-        
-        this.positions = new THREE.DataTexture( data, this.size, this.size, THREE.RGBAFormat, THREE.FloatType );
-        this.positions.needsUpdate = true;
-
-        // Create FBO scene
-        this.sceneFBO = new THREE.Scene();
         let viewArea = this.size / 2 + 0.01;
         this.cameraFBO = new THREE.OrthographicCamera(-viewArea, viewArea, viewArea, -viewArea, -2, 2);
         this.cameraFBO.position.z = 1;
@@ -294,17 +235,18 @@ export default class Sketch {
         this.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
         this.geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 
-        this.geo.setDrawRange(3, 10);
+        // this.geo.setDrawRange(3, 10);
 
         this.simulationMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 time: {value: 0},
                 uMouse: {value: new THREE.Vector3(0, 0, 0)},
-                uTime: {value:0},
                 uProgress: {value:0},
+                uTime: {value:0},
+                uSource: {value: new THREE.Vector3(0, 0, 0)},
+                uRenderMode: {value: 0},
                 uCurrentPosition: {value: this.data1},
-                uOriginalPosition: {value: this.data1},
-                uOriginalPosition1: {value: this.data2},
+                uDirections: {value: null },
             },
             vertexShader: simulationVertexShader,
             fragmentShader: simulationFragmentShader,
@@ -313,6 +255,18 @@ export default class Sketch {
         this.sceneFBO.add(this.simulationMesh);
 
         this.renderTarget = new THREE.WebGLRenderTarget(this.size, this.size, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType,
+        })
+        this.directions = new THREE.WebGLRenderTarget(this.size, this.size, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType,
+        })
+        this.initPos = new THREE.WebGLRenderTarget(this.size, this.size, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGBAFormat,
@@ -404,12 +358,60 @@ export default class Sketch {
     render() {
         this.time += 0.05;
 
+        if( !this.init) {
+            this.init = true;
+
+            // // DIRECTIONS
+            // this.simulationMaterial.uniforms.uRenderMode.value = 1;
+            // this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, -1, 0);
+            // this.renderer.setRenderTarget(this.directions);
+            // this.renderer.render(this.sceneFBO, this.cameraFBO);
+            // this.simulationMaterial.uniforms.uDirections.value = this.directions.texture;
+
+            // POSITIONS
+            this.simulationMaterial.uniforms.uRenderMode.value = 2;
+            this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+            this.renderer.setRenderTarget(this.initPos);
+            this.renderer.render(this.sceneFBO, this.cameraFBO);
+            this.simulationMaterial.uniforms.uCurrentPosition.value = this.initPos.texture;
+        }
+
         this.material.uniforms.time.value = this.time; // to have access to the 'time' from shaders?
         
-        // this.renderer.render(this.scene, this.camera);
-        
+        // SIMULATION
+        this.simulationMaterial.uniforms.uDirections.value = this.directions.texture;
+        this.simulationMaterial.uniforms.uRenderMode.value = 0;
+        this.geo.setDrawRange(0, this.number);
         this.renderer.setRenderTarget(this.renderTarget);
         this.renderer.render(this.sceneFBO, this.cameraFBO);
+
+        // BEGIN EMITTER
+        this.emit = 5;
+        this.geo.setDrawRange(this.currentParticles, this.emit);
+        this.renderer.autoClear = false;
+
+
+
+        this.currentParticles += this.emit;
+        if(this.currentParticles > this.number) {
+            this.currentParticles = 0;
+        }
+
+        // DIRECTIONS
+        this.simulationMaterial.uniforms.uRenderMode.value = 1;
+        this.simulationMaterial.uniforms.uDirections.value = null;
+        this.simulationMaterial.uniforms.uCurrentPosition.value = null;
+        this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, 1, 0);
+        this.renderer.setRenderTarget(this.directions);
+        this.renderer.render(this.sceneFBO, this.cameraFBO);
+
+        // POSITIONS
+        this.simulationMaterial.uniforms.uRenderMode.value = 2;
+        this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+        this.renderer.setRenderTarget(this.renderTarget);
+        this.renderer.render(this.sceneFBO, this.cameraFBO);
+        this.simulationMaterial.uniforms.uCurrentPosition.value = this.initPos.texture;
+
         
         this.renderer.setRenderTarget(null);
         this.renderer.render(this.scene, this.camera);

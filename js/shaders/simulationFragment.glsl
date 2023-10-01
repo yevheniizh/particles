@@ -1,8 +1,9 @@
 varying vec2 vUv;
 uniform float uProgress;
+uniform int uRenderMode;
+uniform vec3 uSource;
 uniform sampler2D uCurrentPosition;
-uniform sampler2D uOriginalPosition;
-uniform sampler2D uOriginalPosition1;
+uniform sampler2D uDirections;
 uniform vec3 uMouse;
 uniform float uTime;
 
@@ -13,39 +14,26 @@ float rand(vec2 co){
 void main() {
     float offset = rand(vUv);
     vec3 position = texture2D( uCurrentPosition, vUv ).xyz;
-    vec3 original = texture2D( uOriginalPosition, vUv ).xyz;
-    vec3 original1 = texture2D( uOriginalPosition1, vUv ).xyz;
+    vec3 direction = texture2D( uDirections, vUv ).xyz;
 
-    vec3 finalOriginal = original;
-
-    // vec2 finalOriginal = mix(original, original1, uProgress);
-
-    // velocity *= 0.99;
-
-    // mouse attraction to shape force
-    vec3 direction = normalize( finalOriginal - position );
-    float dist = length( finalOriginal - position );
-    if( dist > 0.01 ) {
-        position += direction * 0.001;
+    if(uRenderMode==0) {
+        position += direction * 0.01;
+        gl_FragColor = vec4( position, 1. );
     }
 
-    // mouse repel force
-    float mouseDistance = distance( position, uMouse );
-    float maxDistance = 0.3;
-    if( mouseDistance < maxDistance ) {
-        vec3 direction = normalize( position - uMouse );
-        position += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.1;
+    // DIRECTIONS
+    if(uRenderMode==1) {
+        float rnd1 = rand(vUv) - 0.5;
+        float rnd2 = rand(vUv + vec2(0.1,0.1) - 0.5);
+        float rnd3 = rand(vUv + vec2(0.3,0.3) - 0.5);
+        gl_FragColor = vec4( uSource + vec3(rnd1,rnd2,rnd3), 1. );
     }
 
-    // lifespan of a particle
-    float lifespan = 10.;
-    float age = mod( uTime + lifespan * offset, lifespan ); // 0...20
-    if( age < 0.1 ) {
-        // velocity = vec2(0.0,0.001);
-        position.xyz = finalOriginal;
+    // POSITIONS
+    if(uRenderMode==2) {
+        float rnd1 = rand(vUv) - 0.5;
+        float rnd2 = rand(vUv + vec2(0.1,0.1)) - 0.5;
+        float rnd3 = rand(vUv + vec2(0.3,0.3)) - 0.5;
+        gl_FragColor = vec4( uSource + vec3(rnd1,rnd2,rnd3)*0.1, 1. );
     }
-
-    // position.xy += velocity;
-
-    gl_FragColor = vec4( position, 1. );
 }

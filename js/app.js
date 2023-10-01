@@ -35,7 +35,7 @@ const loadImage = path => {
 
 export default class Sketch {
     constructor(options) {
-        this.size = 1024;
+        this.size = 6;
         this.number = this.size * this.size;
         this.container = options.dom;
         this.scene = new THREE.Scene();
@@ -68,7 +68,7 @@ export default class Sketch {
                 this.data1 = this.getPointsOnSphere();
                 this.data2 = this.getPointsOnSphere();
                 this.mouseEvents();
-                this.setupFBO();
+                this.setupFBO1();
                 this.addObjects();
                 this.setupResize();
                 this.render();
@@ -247,6 +247,86 @@ export default class Sketch {
         })
     }
 
+    // Frame Buffer Output
+    setupFBO1() {
+        // Create data texture
+        this.material = new THREE.MeshNormalMaterial();
+
+        const data = new Float32Array( 4 * this.number ); // 4 corresponds to 4 dimensions of vec4 from shader
+        for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
+                const index = i * this.size + j;
+                data[ 4 * index ] = lerp( -0.5, 0.5, j / ( this.size - 1 ) );
+                data[ 4 * index + 1 ] = lerp( -0.5, 0.5, i / ( this.size - 1 ) );
+                data[ 4 * index + 2 ] = 0;
+                data[ 4 * index + 3 ] = 1;
+            }    
+        }
+        
+        this.positions = new THREE.DataTexture( data, this.size, this.size, THREE.RGBAFormat, THREE.FloatType );
+        this.positions.needsUpdate = true;
+
+        // Create FBO scene
+        this.sceneFBO = new THREE.Scene();
+        let viewArea = this.size / 2 + 0.01;
+        this.cameraFBO = new THREE.OrthographicCamera(-viewArea, viewArea, viewArea, -viewArea, -2, 2);
+        this.cameraFBO.position.z = 1;
+        this.cameraFBO.lookAt(new THREE.Vector3( 0, 0, 0 ))
+
+        let geo = new THREE.PlaneGeometry( 2, 2, 2, 2 );
+        this.geo = new THREE.BufferGeometry( 2, 2, 2, 2 );
+        let pos = new Float32Array( 3 * this.number );
+        let uv = new Float32Array( 2 * this.number );
+
+        for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
+                const index = i * this.size + j;
+
+                pos[ 3 * index ] = this.size * lerp( -0.5, 0.5, j / (this.size - 1) );
+                pos[ 3 * index + 1 ] = this.size * lerp( -0.5, 0.5, i / (this.size - 1) );
+                pos[ 3 * index + 2 ] = 0;
+
+                uv[ 2 * index ] = j / (this.size - 1);
+                uv[ 2 * index + 1 ] = i / (this.size - 1);
+            }    
+        }
+
+        this.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        this.geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+
+        this.geo.setDrawRange(3, 10);
+
+        this.simulationMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                time: {value: 0},
+                uMouse: {value: new THREE.Vector3(0, 0, 0)},
+                uTime: {value:0},
+                uProgress: {value:0},
+                uCurrentPosition: {value: this.data1},
+                uOriginalPosition: {value: this.data1},
+                uOriginalPosition1: {value: this.data2},
+            },
+            vertexShader: simulationVertexShader,
+            fragmentShader: simulationFragmentShader,
+        });
+        this.simulationMesh = new THREE.Points(this.geo, this.simulationMaterial);
+        this.sceneFBO.add(this.simulationMesh);
+
+        this.renderTarget = new THREE.WebGLRenderTarget(this.size, this.size, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType,
+        })
+
+        this.renderTarget1 = new THREE.WebGLRenderTarget(this.size, this.size, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType,
+        })
+    }
+
     resize() {
         this.width = this.container.offsetWidth;
         this.height = this.container.offsetHeight;
@@ -311,6 +391,14 @@ export default class Sketch {
 
         this.mesh = new THREE.Points(this.geometry, this.material);
         this.scene.add(this.mesh);
+
+        this.debugPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1, 1, 1),
+            new THREE.MeshBasicMaterial({
+                map: new THREE.TextureLoader().load(t1),
+            }),
+        );
+        this.scene.add(this.debugPlane);
     }
     
     render() {
@@ -334,6 +422,8 @@ export default class Sketch {
         this.material.uniforms.uTexture.value = this.renderTarget.texture;
         this.simulationMaterial.uniforms.uCurrentPosition.value = this.renderTarget1.texture;
         this.simulationMaterial.uniforms.uTime.value = this.time;
+
+        this.debugPlane.material.map = this.renderTarget.texture;
 
         window.requestAnimationFrame(this.render.bind(this))
     }

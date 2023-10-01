@@ -31,10 +31,10 @@ void main() {
 
     // mouse repel force
     float mouseDistance = distance( position, uMouse );
-    float maxDistance = 0.1;
+    float maxDistance = 0.3;
     if( mouseDistance < maxDistance ) {
         vec3 direction = normalize( position - uMouse );
-        position += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.01;
+        position += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.1;
     }
 
     // lifespan of a particle

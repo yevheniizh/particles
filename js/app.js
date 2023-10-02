@@ -352,21 +352,38 @@ export default class Sketch {
                 map: new THREE.TextureLoader().load(t1),
             }),
         );
-        this.scene.add(this.debugPlane);
+        // this.scene.add(this.debugPlane);
+
+        this.emitter = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.1),
+            new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+            }),
+        );
+        this.scene.add(this.emitter);
+        this.emitterDir = new THREE.Vector3(0,0,0);
+        this.emitterPrev = new THREE.Vector3(0,0,0);
+    }
+
+    moveEmitter() {
+        this.emitter.position.x = Math.sin(this.time) * 0.5;
+        // this.emitter.position.y = Math.cos(this.time) * 0.5;
     }
     
     render() {
         this.time += 0.05;
+        this.moveEmitter();
 
         if( !this.init) {
             this.init = true;
 
-            // // DIRECTIONS
-            // this.simulationMaterial.uniforms.uRenderMode.value = 1;
-            // this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, -1, 0);
-            // this.renderer.setRenderTarget(this.directions);
-            // this.renderer.render(this.sceneFBO, this.cameraFBO);
-            // this.simulationMaterial.uniforms.uDirections.value = this.directions.texture;
+            // DIRECTIONS
+            this.simulationMaterial.uniforms.uRenderMode.value = 1;
+            this.simulationMaterial.uniforms.uTime.value = -100;
+            this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, -1, 0);
+            this.renderer.setRenderTarget(this.directions);
+            this.renderer.render(this.sceneFBO, this.cameraFBO);
+            this.simulationMaterial.uniforms.uDirections.value = this.directions.texture;
 
             // POSITIONS
             this.simulationMaterial.uniforms.uRenderMode.value = 2;
@@ -387,32 +404,37 @@ export default class Sketch {
 
         // BEGIN EMITTER
         this.emit = 5;
+        this.emitterDir = this.emitter.position.clone().sub(this.emitterPrev).multiplyScalar(100);
         this.geo.setDrawRange(this.currentParticles, this.emit);
         this.renderer.autoClear = false;
 
-
-
-        this.currentParticles += this.emit;
-        if(this.currentParticles > this.number) {
-            this.currentParticles = 0;
-        }
 
         // DIRECTIONS
         this.simulationMaterial.uniforms.uRenderMode.value = 1;
         this.simulationMaterial.uniforms.uDirections.value = null;
         this.simulationMaterial.uniforms.uCurrentPosition.value = null;
-        this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, 1, 0);
+        this.simulationMaterial.uniforms.uSource.value = this.emitterDir;
         this.renderer.setRenderTarget(this.directions);
         this.renderer.render(this.sceneFBO, this.cameraFBO);
 
         // POSITIONS
         this.simulationMaterial.uniforms.uRenderMode.value = 2;
-        this.simulationMaterial.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+        this.simulationMaterial.uniforms.uSource.value = this.emitter.position;
         this.renderer.setRenderTarget(this.renderTarget);
         this.renderer.render(this.sceneFBO, this.cameraFBO);
-        this.simulationMaterial.uniforms.uCurrentPosition.value = this.initPos.texture;
 
-        
+        this.currentParticles += this.emit;
+        if(this.currentParticles > this.number) {
+            this.currentParticles = 0;
+        }
+        this.renderer.autoClear = true;
+
+        this.emitterPrev = this.emitter.position.clone();
+        // END OF EMITTER
+
+
+
+        // RENDER SCENE
         this.renderer.setRenderTarget(null);
         this.renderer.render(this.scene, this.camera);
 

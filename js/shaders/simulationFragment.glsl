@@ -14,11 +14,13 @@ float rand(vec2 co){
 void main() {
     float offset = rand(vUv);
     vec3 position = texture2D( uCurrentPosition, vUv ).xyz;
-    vec3 direction = texture2D( uDirections, vUv ).xyz;
+    vec4 direction = texture2D( uDirections, vUv );
 
     if(uRenderMode==0) {
-        position += direction * 0.01;
-        gl_FragColor = vec4( position, 1. );
+        float life = 1. - clamp( (uTime - direction.a) / 15., 0., 1. );
+        float speedLife = clamp( life, 0.1, 1.0 );
+        position.xyz = position.xyz + speedLife * direction.xyz * 0.01 + vec3(0.,-1.,0.) * 0.005;
+        gl_FragColor = vec4( position, life );
     }
 
     // DIRECTIONS
@@ -26,7 +28,7 @@ void main() {
         float rnd1 = rand(vUv) - 0.5;
         float rnd2 = rand(vUv + vec2(0.1,0.1) - 0.5);
         float rnd3 = rand(vUv + vec2(0.3,0.3) - 0.5);
-        gl_FragColor = vec4( uSource + vec3(rnd1,rnd2,rnd3), 1. );
+        gl_FragColor = vec4( uSource + vec3(rnd1,rnd2,rnd3)*0.2, uTime );
     }
 
     // POSITIONS

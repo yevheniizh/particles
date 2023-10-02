@@ -1,18 +1,19 @@
 import { shaderMaterial } from "@react-three/drei";
 import { extend } from "@react-three/fiber";
 
-
 const RenderMaterial = shaderMaterial(
     {
-        time: 0,
+        uPosition: null,
     },
     // vertex shader
     `
     attribute vec2 ref;
     varying vec2 vRef;
+    uniform sampler2D uPosition;
     void main() {
       vRef = ref;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      vec3 pos = texture2D(uPosition, ref).rgb;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
       gl_PointSize = 5.0;
     }
     `,

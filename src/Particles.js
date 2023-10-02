@@ -3,12 +3,39 @@ import { useRef } from 'react';
 import * as THREE from 'three';
 import './RenderMaterial'
 import './SimulationMaterial'
-import { getDataTexture } from './getDataTexture';
-import { createPortal, useFrame, useThree } from '@react-three/fiber';
-import { useFBO } from '@react-three/drei';
+import { getDataTexture, getSphereTexture, getVelocityTexture } from './getDataTexture';
+import { useFrame, useThree } from '@react-three/fiber';
+import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer';
+
+import simulationFragmentPosition from './shaders/simulationFragmentPosition';
+import simulationFragmentVelocity from './shaders/simulationFragmentVelocity';
 
 export function Particles(){
-    const SIZE = 1024;
+    const SIZE = 16;
+    const { gl, viewport} = useThree();
+
+    const simulationMaterial = useRef();
+    const renderMaterial = useRef();
+    const followMouse = useRef();
+
+    const gpuCompute = new GPUComputationRenderer( SIZE, SIZE, gl );
+
+    const pointsOnSphere = getSphereTexture(SIZE);
+
+    const positionVariable = gpuCompute.addVariable( 'uCurrentPosition', simulationFragmentPosition, pointsOnSphere );
+    const velocityVariable = gpuCompute.addVariable( 'uCurrentVelocity', simulationFragmentVelocity, getVelocityTexture(SIZE) );
+
+    gpuCompute.setVariableDependencies( positionVariable, [ positionVariable, velocityVariable ] );
+    gpuCompute.setVariableDependencies( velocityVariable, [ positionVariable, velocityVariable ] );
+
+    const positionUniforms = positionVariable.material.uniforms;
+    const velocityUniforms = velocityVariable.material.uniforms;
+
+    velocityUniforms.uMouse = { value : new THREE.Vector3(0, 0, 0) };
+    positionUniforms.uOriginalPosition = { value: pointsOnSphere };
+    velocityUniforms.uOriginalPosition = { value: pointsOnSphere };
+
+    gpuCompute.init();
 
     const particles = new Float32Array(SIZE * SIZE * 3);
     for (let i = 0; i < SIZE; i++) {
@@ -29,62 +56,38 @@ export function Particles(){
         }
     }
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1);
-    let target0 = useFBO( SIZE, SIZE, {
-        magFilter: THREE.NearestFilter,
-        minFilter: THREE.NearestFilter,
-        type: THREE.FloatType,
-    });
-    let target1 = useFBO( SIZE, SIZE, {
-        magFilter: THREE.NearestFilter,
-        minFilter: THREE.NearestFilter,
-        type: THREE.FloatType,
-    });
-    const simulationMaterial = useRef();
-    const renderMaterial = useRef();
-    const followMouse = useRef();
-
-    const { viewport } = useThree();
-
     const originalPosition = getDataTexture(SIZE);
 
     useFrame(({mouse}) => {
         followMouse.current.position.x = mouse.x * viewport.width / 2;
         followMouse.current.position.y = mouse.y * viewport.height / 2;
 
-        simulationMaterial.current.uniforms.uMouse.value.x = followMouse.current.position.x;
-        simulationMaterial.current.uniforms.uMouse.value.y = followMouse.current.position.y;
+        velocityUniforms.uMouse.value.x = followMouse.current.position.x;
+        velocityUniforms.uMouse.value.y = followMouse.current.position.y;
     });
 
     useFrame(({gl}) => {
-        gl.setRenderTarget(target0);
-        gl.render(scene, camera);
-        gl.setRenderTarget(null);
+        gpuCompute.compute();
+        renderMaterial.current.uniforms.uPosition.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
 
-        renderMaterial.current.uniforms.uPosition.value = target1.texture;
-        simulationMaterial.current.uniforms.uPosition.value = target0.texture;
 
-        // [target0, target1] = [target1, target0];
 
-        let temp = target0;
-        target0 = target1;
-        target1 = temp;
+        // gl.setRenderTarget(target0);
+        // gl.render(scene, camera);
+        // gl.setRenderTarget(null);
+
+        // renderMaterial.current.uniforms.uPosition.value = target1.texture;
+        // simulationMaterial.current.uniforms.uPosition.value = target0.texture;
+
+        // // [target0, target1] = [target1, target0];
+
+        // let temp = target0;
+        // target0 = target1;
+        // target1 = temp;
     });
 
     return(
         <>
-            {createPortal(
-                <mesh>
-                    <planeGeometry args={[2, 2]} />
-                    <simulationMaterial
-                        ref={simulationMaterial}
-                        uPosition={originalPosition}
-                        uOriginalPosition={originalPosition}
-                    />
-                </mesh>,
-                scene,
-            )}
             <mesh ref={followMouse}>
                 <sphereGeometry args={[0.1, 32, 32]} />
                 <meshBasicMaterial color="red" />

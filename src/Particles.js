@@ -4,37 +4,58 @@ import * as THREE from 'three';
 import './RenderMaterial'
 import './SimulationMaterial'
 import { getDataTexture } from './getDataTexture';
-import { createPortal, useFrame } from '@react-three/fiber';
+import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { useFBO } from '@react-three/drei';
 
-const SIZE = 32;
-
-const particles = new Float32Array(SIZE * SIZE * 3);
-for (let i = 0; i < SIZE; i++) {
-    for (let j = 0; j < SIZE; j++) {
-        const k = i * SIZE + j;
-        particles[k * 3 + 0] = 5*i / SIZE;
-        particles[k * 3 + 1] = 5*j / SIZE;
-        particles[k * 3 + 2] = 0;
-    }
-}
-
-const ref = new Float32Array(SIZE * SIZE * 2);
-for (let i = 0; i < SIZE; i++) {
-    for (let j = 0; j < SIZE; j++) {
-        const k = i * SIZE + j;
-        ref[k * 2 + 0] = i / (SIZE-1);
-        ref[k * 2 + 1] = j / (SIZE-1);
-    }
-}
-
 export function Particles(){
+    const SIZE = 1024;
+
+    const particles = new Float32Array(SIZE * SIZE * 3);
+    for (let i = 0; i < SIZE; i++) {
+        for (let j = 0; j < SIZE; j++) {
+            const k = i * SIZE + j;
+            particles[k * 3 + 0] = 5*i / SIZE;
+            particles[k * 3 + 1] = 5*j / SIZE;
+            particles[k * 3 + 2] = 0;
+        }
+    }
+
+    const ref = new Float32Array(SIZE * SIZE * 2);
+    for (let i = 0; i < SIZE; i++) {
+        for (let j = 0; j < SIZE; j++) {
+            const k = i * SIZE + j;
+            ref[k * 2 + 0] = i / (SIZE-1);
+            ref[k * 2 + 1] = j / (SIZE-1);
+        }
+    }
+
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1);
-    let target0 = useFBO( SIZE, SIZE, { type: THREE.FloatType });
-    let target1 = useFBO( SIZE, SIZE, { type: THREE.FloatType });
+    let target0 = useFBO( SIZE, SIZE, {
+        magFilter: THREE.NearestFilter,
+        minFilter: THREE.NearestFilter,
+        type: THREE.FloatType,
+    });
+    let target1 = useFBO( SIZE, SIZE, {
+        magFilter: THREE.NearestFilter,
+        minFilter: THREE.NearestFilter,
+        type: THREE.FloatType,
+    });
     const simulationMaterial = useRef();
     const renderMaterial = useRef();
+    const followMouse = useRef();
+
+    const { viewport } = useThree();
+
+    const originalPosition = getDataTexture(SIZE);
+
+    useFrame(({mouse}) => {
+        followMouse.current.position.x = mouse.x * viewport.width / 2;
+        followMouse.current.position.y = mouse.y * viewport.height / 2;
+
+        simulationMaterial.current.uniforms.uMouse.value.x = followMouse.current.position.x;
+        simulationMaterial.current.uniforms.uMouse.value.y = followMouse.current.position.y;
+    });
 
     useFrame(({gl}) => {
         gl.setRenderTarget(target0);
@@ -58,12 +79,16 @@ export function Particles(){
                     <planeGeometry args={[2, 2]} />
                     <simulationMaterial
                         ref={simulationMaterial}
-                        uPosition={getDataTexture(SIZE)}
-                        uVelocity={getDataTexture(SIZE)}
+                        uPosition={originalPosition}
+                        uOriginalPosition={originalPosition}
                     />
                 </mesh>,
                 scene,
             )}
+            <mesh ref={followMouse}>
+                <sphereGeometry args={[0.1, 32, 32]} />
+                <meshBasicMaterial color="red" />
+            </mesh>
             <points>
                 <bufferGeometry>
                     <bufferAttribute
@@ -79,7 +104,7 @@ export function Particles(){
                         itemSize={2}
                     />
                 </bufferGeometry>
-                <renderMaterial ref={renderMaterial} />
+                <renderMaterial transparent blending={THREE.AdditiveBlending} ref={renderMaterial} />
             </points>
         </>
     )

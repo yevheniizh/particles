@@ -14,13 +14,13 @@ const RenderMaterial = shaderMaterial(
       vRef = ref;
       vec3 pos = texture2D(uPosition, ref).rgb;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-      gl_PointSize = 5.0;
+      gl_PointSize = 1.0;
     }
     `,
     `
     varying vec2 vRef;
     void main() {
-      gl_FragColor.rgba = vec4(vRef,0., 1.0);
+      gl_FragColor.rgba = vec4(1.,1.,1.,0.1);
     }
     `,
 )
